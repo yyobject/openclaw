@@ -25,6 +25,22 @@ export type ChannelsStatusOptions = {
   timeout?: string;
 };
 
+function hasResolvedCredentialValue(account: unknown): boolean {
+  if (!account || typeof account !== "object" || Array.isArray(account)) {
+    return false;
+  }
+  const record = account as Record<string, unknown>;
+  return (
+    ["token", "botToken", "appToken", "userToken"].some((key) => {
+      const value = record[key];
+      return typeof value === "string" && value.trim().length > 0;
+    }) ||
+    ["tokenStatus", "botTokenStatus", "appTokenStatus", "userTokenStatus"].some(
+      (key) => record[key] === "available",
+    )
+  );
+}
+
 function appendEnabledConfiguredLinkedBits(bits: string[], account: Record<string, unknown>) {
   if (typeof account.enabled === "boolean") {
     bits.push(account.enabled ? "enabled" : "disabled");
@@ -205,6 +221,7 @@ export function formatGatewayChannelsStatusLines(payload: Record<string, unknown
 export async function formatConfigChannelsStatusLines(
   cfg: OpenClawConfig,
   meta: { path?: string; mode?: "local" | "remote" },
+  opts?: { sourceConfig?: OpenClawConfig },
 ): Promise<string[]> {
   const lines: string[] = [];
   lines.push(theme.warn("Gateway not reachable; showing config-only status."));
@@ -229,6 +246,7 @@ export async function formatConfigChannelsStatusLines(
     });
 
   const plugins = listChannelPlugins();
+  const sourceConfig = opts?.sourceConfig ?? cfg;
   for (const plugin of plugins) {
     const accountIds = plugin.config.listAccountIds(cfg);
     if (!accountIds.length) {
@@ -236,12 +254,22 @@ export async function formatConfigChannelsStatusLines(
     }
     const snapshots: ChannelAccountSnapshot[] = [];
     for (const accountId of accountIds) {
-      const snapshot = await buildChannelAccountSnapshot({
+      const sourceSnapshot = await buildChannelAccountSnapshot({
+        plugin,
+        cfg: sourceConfig,
+        accountId,
+      });
+      const resolvedSnapshot = await buildChannelAccountSnapshot({
         plugin,
         cfg,
         accountId,
       });
-      snapshots.push(snapshot);
+      snapshots.push(
+        hasConfiguredUnavailableCredentialStatus(sourceSnapshot) &&
+          !hasResolvedCredentialValue(resolvedSnapshot)
+          ? sourceSnapshot
+          : resolvedSnapshot,
+      );
     }
     if (snapshots.length > 0) {
       lines.push(...accountLines(plugin.id, snapshots));
@@ -290,7 +318,7 @@ export async function channelsStatusCommand(
     if (!cfg) {
       return;
     }
-    const { diagnostics } = await resolveCommandSecretRefsViaGateway({
+    const { resolvedConfig, diagnostics } = await resolveCommandSecretRefsViaGateway({
       config: cfg,
       commandName: "channels status",
       targetIds: getChannelsCommandSecretTargetIds(),
@@ -303,10 +331,14 @@ export async function channelsStatusCommand(
     const mode = cfg.gateway?.mode === "remote" ? "remote" : "local";
     runtime.log(
       (
-        await formatConfigChannelsStatusLines(cfg, {
-          path: snapshot.path,
-          mode,
-        })
+        await formatConfigChannelsStatusLines(
+          resolvedConfig,
+          {
+            path: snapshot.path,
+            mode,
+          },
+          { sourceConfig: cfg },
+        )
       ).join("\n"),
     );
   }

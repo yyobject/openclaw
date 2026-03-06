@@ -182,4 +182,26 @@ describe("slackPlugin config", () => {
     expect(configured).toBe(false);
     expect(snapshot?.configured).toBe(false);
   });
+
+  it("does not mark partial configured-unavailable token status as configured", async () => {
+    const snapshot = await slackPlugin.status?.buildAccountSnapshot?.({
+      account: {
+        accountId: "default",
+        name: "Default",
+        enabled: true,
+        configured: false,
+        botTokenStatus: "configured_unavailable",
+        appTokenStatus: "missing",
+        botTokenSource: "config",
+        appTokenSource: "none",
+        config: {},
+      } as never,
+      cfg: {} as OpenClawConfig,
+      runtime: undefined,
+    });
+
+    expect(snapshot?.configured).toBe(false);
+    expect(snapshot?.botTokenStatus).toBe("configured_unavailable");
+    expect(snapshot?.appTokenStatus).toBe("missing");
+  });
 });

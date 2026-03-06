@@ -18,7 +18,7 @@ import {
   normalizeSlackMessagingTarget,
   PAIRING_APPROVED_MESSAGE,
   projectCredentialSnapshotFields,
-  resolveConfiguredFromCredentialStatuses,
+  resolveConfiguredFromRequiredCredentialStatuses,
   resolveDefaultSlackAccountId,
   resolveSlackAccount,
   resolveSlackReplyToMode,
@@ -433,7 +433,10 @@ export const slackPlugin: ChannelPlugin<ResolvedSlackAccount> = {
     },
     buildAccountSnapshot: ({ account, runtime, probe }) => {
       const configured =
-        resolveConfiguredFromCredentialStatuses(account) ?? isSlackAccountConfigured(account);
+        resolveConfiguredFromRequiredCredentialStatuses(account, [
+          "botTokenStatus",
+          "appTokenStatus",
+        ]) ?? isSlackAccountConfigured(account);
       return {
         accountId: account.accountId,
         name: account.name,

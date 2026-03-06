@@ -11,6 +11,8 @@ const CREDENTIAL_STATUS_KEYS = [
   "userTokenStatus",
 ] as const;
 
+type CredentialStatusKey = (typeof CREDENTIAL_STATUS_KEYS)[number];
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
@@ -48,10 +50,7 @@ function readStringArray(record: Record<string, unknown>, key: string): string[]
   return normalized.length > 0 ? normalized : undefined;
 }
 
-function readCredentialStatus(
-  record: Record<string, unknown>,
-  key: (typeof CREDENTIAL_STATUS_KEYS)[number],
-) {
+function readCredentialStatus(record: Record<string, unknown>, key: CredentialStatusKey) {
   const value = record[key];
   return value === "available" || value === "configured_unavailable" || value === "missing"
     ? value
@@ -75,6 +74,28 @@ export function resolveConfiguredFromCredentialStatuses(account: unknown): boole
     }
   }
   return sawCredentialStatus ? false : undefined;
+}
+
+export function resolveConfiguredFromRequiredCredentialStatuses(
+  account: unknown,
+  requiredKeys: CredentialStatusKey[],
+): boolean | undefined {
+  const record = asRecord(account);
+  if (!record) {
+    return undefined;
+  }
+  let sawCredentialStatus = false;
+  for (const key of requiredKeys) {
+    const status = readCredentialStatus(record, key);
+    if (!status) {
+      continue;
+    }
+    sawCredentialStatus = true;
+    if (status === "missing") {
+      return false;
+    }
+  }
+  return sawCredentialStatus ? true : undefined;
 }
 
 export function hasConfiguredUnavailableCredentialStatus(account: unknown): boolean {

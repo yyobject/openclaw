@@ -35,6 +35,57 @@ function makeUnavailableTokenPlugin(): ChannelPlugin {
   };
 }
 
+function makeResolvedTokenPlugin(): ChannelPlugin {
+  return {
+    id: "token-only",
+    meta: {
+      id: "token-only",
+      label: "TokenOnly",
+      selectionLabel: "TokenOnly",
+      docsPath: "/channels/token-only",
+      blurb: "test",
+    },
+    capabilities: { chatTypes: ["direct"] },
+    config: {
+      listAccountIds: () => ["primary"],
+      defaultAccountId: () => "primary",
+      inspectAccount: (cfg) =>
+        (cfg as { secretResolved?: boolean }).secretResolved
+          ? {
+              accountId: "primary",
+              name: "Primary",
+              enabled: true,
+              configured: true,
+              token: "resolved-token",
+              tokenSource: "config",
+              tokenStatus: "available",
+            }
+          : {
+              accountId: "primary",
+              name: "Primary",
+              enabled: true,
+              configured: true,
+              token: "",
+              tokenSource: "config",
+              tokenStatus: "configured_unavailable",
+            },
+      resolveAccount: () => ({
+        name: "Primary",
+        enabled: true,
+        configured: true,
+        token: "",
+        tokenSource: "config",
+        tokenStatus: "configured_unavailable",
+      }),
+      isConfigured: () => true,
+      isEnabled: () => true,
+    },
+    actions: {
+      listActions: () => ["send"],
+    },
+  };
+}
+
 describe("config-only channels status output", () => {
   afterEach(() => {
     setActivePluginRegistry(createTestRegistry([]));
@@ -59,5 +110,34 @@ describe("config-only channels status output", () => {
     expect(joined).toContain("TokenOnly");
     expect(joined).toContain("configured, secret unavailable in this command path");
     expect(joined).toContain("token:config (unavailable)");
+  });
+
+  it("prefers resolved config snapshots when command-local secret resolution succeeds", async () => {
+    setActivePluginRegistry(
+      createTestRegistry([
+        {
+          pluginId: "token-only",
+          source: "test",
+          plugin: makeResolvedTokenPlugin(),
+        },
+      ]),
+    );
+
+    const lines = await formatConfigChannelsStatusLines(
+      { secretResolved: true, channels: {} } as never,
+      {
+        mode: "local",
+      },
+      {
+        sourceConfig: { channels: {} } as never,
+      },
+    );
+
+    const joined = lines.join("\n");
+    expect(joined).toContain("TokenOnly");
+    expect(joined).toContain("configured");
+    expect(joined).toContain("token:config");
+    expect(joined).not.toContain("secret unavailable in this command path");
+    expect(joined).not.toContain("token:config (unavailable)");
   });
 });

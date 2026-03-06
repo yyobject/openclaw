@@ -32,6 +32,7 @@ export { inspectSlackAccount } from "../slack/account-inspect.js";
 export {
   projectCredentialSnapshotFields,
   resolveConfiguredFromCredentialStatuses,
+  resolveConfiguredFromRequiredCredentialStatuses,
 } from "../channels/account-snapshot-fields.js";
 export {
   listSlackDirectoryGroupsFromConfig,
